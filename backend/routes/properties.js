@@ -35,7 +35,7 @@ const propertyValidation = [
     .withMessage('Description must be between 20 and 2000 characters'),
   
   body('type')
-    .isIn(['apartment', 'house', 'villa', 'townhouse', 'studio', 'commercial'])
+    .isIn(['apartment', 'house', 'villa', 'townhouse', 'studio', 'penthouse', 'duplex', 'office', 'shop', 'warehouse', 'commercial'])
     .withMessage('Invalid property type'),
   
   body('price')
@@ -49,10 +49,10 @@ const propertyValidation = [
     .notEmpty()
     .withMessage('City is required'),
   
-  body('location.area')
+  body('location.county')
     .trim()
     .notEmpty()
-    .withMessage('Area is required'),
+    .withMessage('County is required'),
   
   body('location.address')
     .trim()

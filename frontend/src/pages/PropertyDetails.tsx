@@ -286,33 +286,15 @@ const PropertyDetails: React.FC = () => {
             {/* Property Features */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Features & Amenities</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="font-semibold text-gray-800 mb-3">Building Features</h3>
-                  <ul className="space-y-2">
-                    {property.amenities.slice(0, 5).map((feature: string, index: number) => (
-                      <li key={index} className="flex items-center text-gray-700">
-                        <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800 mb-3">Unit Amenities</h3>
-                  <ul className="space-y-2">
-                    {property.amenities.map((amenity, index) => (
-                      <li key={index} className="flex items-center text-gray-700">
-                        <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        {amenity}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {property.amenities.map((amenity, index) => (
+                  <div key={index} className="flex items-center text-gray-700">
+                    <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="capitalize">{amenity.replace(/_/g, ' ').replace(/-/g, ' ')}</span>
+                  </div>
+                ))}
               </div>
             </div>
 

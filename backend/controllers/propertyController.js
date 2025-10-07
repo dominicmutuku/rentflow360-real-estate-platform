@@ -208,7 +208,6 @@ const createProperty = async (req, res) => {
       bedrooms,
       bathrooms,
       size,
-      features = [],
       amenities = [],
       images = [],
       status = 'active',
@@ -217,6 +216,15 @@ const createProperty = async (req, res) => {
       petFriendly = false,
       listingType = 'rent'
     } = req.body;
+
+    // Get user details for contact information
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
 
     const propertyData = {
       title,
@@ -237,11 +245,17 @@ const createProperty = async (req, res) => {
           unit: 'sqft'
         }
       },
-      features,
       amenities,
       images,
       status,
-      agent: req.user.id
+      owner: req.user.id, // Required field
+      agent: req.user.id,
+      contact: {
+        phone: user.phone || '+254700000000', // Required field - use user's phone or default
+        email: user.email,
+        whatsapp: user.phone,
+        preferredContactMethod: 'phone'
+      }
     };
 
     const property = new Property(propertyData);

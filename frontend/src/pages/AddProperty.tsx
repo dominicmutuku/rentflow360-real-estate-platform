@@ -88,13 +88,13 @@ const AddProperty: React.FC = () => {
         ...prev,
         [parent]: {
           ...(prev[parent as keyof PropertyForm] as any),
-          [child]: type === 'number' ? parseFloat(value) : value
+          [child]: type === 'number' ? (value === '' ? 0 : parseFloat(value) || 0) : value
         }
       }));
     } else {
       setFormData(prev => ({
         ...prev,
-        [name]: type === 'number' ? parseFloat(value) : value
+        [name]: type === 'number' ? (value === '' ? 0 : parseFloat(value) || 0) : value
       }));
     }
   };
@@ -138,7 +138,9 @@ const AddProperty: React.FC = () => {
                formData.description.trim().length >= 20 && 
                formData.type !== '';
       case 2:
-        return formData.location.address.trim() !== '' && formData.location.city.trim() !== '';
+        return formData.location.address.trim() !== '' && 
+               formData.location.city.trim() !== '' && 
+               formData.location.area.trim() !== '';
       case 3:
         return formData.price > 0 && formData.size > 0;
       case 4:
@@ -167,33 +169,44 @@ const AddProperty: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateStep(currentStep)) {
-      alert('Please fill in all required fields');
-      return;
+    // Validate all steps before submission
+    for (let step = 1; step <= 5; step++) {
+      if (!validateStep(step)) {
+        alert(`Please complete all required fields in step ${step}`);
+        setCurrentStep(step);
+        return;
+      }
     }
 
     setLoading(true);
     
     try {
-      // Prepare property data to match backend validation expectations
-      const { images, ...rest } = formData;
+      // Combine features and amenities into one array for backend
+      const combinedAmenities = [...formData.features, ...formData.amenities];
       
+      // Prepare property data to match backend validation expectations
       const propertyData = {
         title: formData.title,
         description: formData.description,
-        type: formData.type, // Backend expects 'type', not 'propertyType'
-        price: formData.price, // Backend expects flat number, not object
-        location: formData.location,
+        type: formData.type,
+        price: formData.price,
+        location: {
+          address: formData.location.address,
+          city: formData.location.city,
+          county: formData.location.area, // Map 'area' to 'county' as backend expects
+          neighborhood: formData.location.neighborhood,
+          coordinates: formData.location.coordinates
+        },
         bedrooms: formData.bedrooms,
         bathrooms: formData.bathrooms,
         size: formData.size,
-        features: formData.features,
-        amenities: formData.amenities,
+        amenities: combinedAmenities, // Send combined features + amenities as amenities
         status: formData.status,
         furnished: formData.furnished,
         parking: formData.parking,
         petFriendly: formData.petFriendly,
-        images: [] // Empty for now
+        listingType: 'rent',
+        images: []
       };
 
       console.log('Sending property data:', propertyData);
@@ -208,7 +221,7 @@ const AddProperty: React.FC = () => {
       });
 
       if (response.ok) {
-        const result = await response.json();
+        await response.json();
         alert('Property added successfully!');
         navigate('/agent-dashboard');
       } else {
@@ -339,7 +352,7 @@ const AddProperty: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Area/District
+                  Area/District *
                 </label>
                 <input
                   type="text"
@@ -348,6 +361,7 @@ const AddProperty: React.FC = () => {
                   onChange={handleInputChange}
                   placeholder="e.g., Westlands"
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
                 />
               </div>
             </div>

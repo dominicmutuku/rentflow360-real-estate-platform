@@ -130,21 +130,23 @@ const propertySchema = new mongoose.Schema({
   amenities: [{
     type: String,
     enum: [
-      // Indoor amenities
-      'air-conditioning', 'heating', 'furnished', 'kitchen-appliances',
-      'internet', 'cable-tv', 'fireplace', 'balcony', 'terrace',
-      'walk-in-closet', 'study-room', 'servant-quarter', 'store-room',
+      // Indoor amenities (with both hyphen and underscore formats)
+      'air-conditioning', 'air_conditioning', 'heating', 'furnished', 'kitchen-appliances',
+      'internet', 'wifi', 'cable-tv', 'fireplace', 'balcony', 'terrace',
+      'walk-in-closet', 'walk_in_closet', 'study-room', 'study_room', 'servant-quarter', 'servant_quarters',
+      'store-room', 'storage_room', 'kitchen', 'living_room', 'dining_room',
+      'master_bedroom', 'guest_room', 'laundry', 'pet_friendly', 'pet-friendly',
       
       // Building amenities
-      'elevator', 'parking', 'garage', 'gym', 'swimming-pool',
-      'playground', 'garden', 'rooftop', 'common-room',
+      'elevator', 'parking', 'garage', 'gym', 'swimming-pool', 'swimming_pool',
+      'playground', 'garden', 'rooftop', 'common-room', 'basement', 'attic', 'pantry',
       
       // Security features
-      'security-guard', 'cctv', 'alarm-system', 'secure-parking',
+      'security-guard', 'security', 'cctv', 'alarm-system', 'secure-parking',
       'gated-community', 'intercom',
       
       // Utilities
-      'water-supply', 'backup-generator', 'solar-power', 'borehole',
+      'water-supply', 'backup-generator', 'solar-power', 'solar_power', 'borehole',
       'waste-management',
       
       // Location benefits
