@@ -73,22 +73,37 @@ const AgentDashboard: React.FC = () => {
     }
   }, [user]);
 
+  // Update stats when properties change
+  useEffect(() => {
+    if (properties.length > 0) {
+      const totalViews = properties.reduce((sum, prop) => sum + (prop.views || 0), 0);
+      setStats(prev => ({
+        ...prev,
+        totalProperties: properties.length,
+        activeProperties: properties.filter(p => p.status === 'active').length,
+        totalViews
+      }));
+    }
+  }, [properties]);
+
   const fetchAgentData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('rentflow360_token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch agent data in parallel
       const [propertiesRes, inquiriesRes, statsRes] = await Promise.all([
-        fetch('/api/properties/agent/properties', { headers }),
-        fetch('/api/inquiries', { headers }),
-        fetch('/api/inquiries/stats', { headers })
+        fetch('http://localhost:5000/api/properties/agent/my-properties', { headers }),
+        fetch('http://localhost:5000/api/inquiries', { headers }),
+        fetch('http://localhost:5000/api/inquiries/stats', { headers })
       ]);
 
       if (propertiesRes.ok) {
         const propertiesData = await propertiesRes.json();
         setProperties(propertiesData.data?.properties || []);
+      } else {
+        console.error('Failed to fetch properties:', await propertiesRes.text());
       }
 
       if (inquiriesRes.ok) {
@@ -99,16 +114,13 @@ const AgentDashboard: React.FC = () => {
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         const statistics = statsData.data?.statistics || {};
-        const totalViews = properties.reduce((sum, prop) => sum + prop.views, 0);
         
-        setStats({
-          totalProperties: properties.length,
-          activeProperties: properties.filter(p => p.status === 'active').length,
+        setStats(prev => ({
+          ...prev,
           totalInquiries: statistics.total || 0,
           pendingInquiries: statistics.pending || 0,
-          totalViews,
           avgResponseTime: statistics.avgResponseTime || 0
-        });
+        }));
       }
     } catch (error) {
       console.error('Error fetching agent data:', error);
@@ -119,8 +131,8 @@ const AgentDashboard: React.FC = () => {
 
   const handlePropertyStatusChange = async (propertyId: string, newStatus: string) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/properties/${propertyId}`, {
+      const token = localStorage.getItem('rentflow360_token');
+      const response = await fetch(`http://localhost:5000/api/properties/${propertyId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

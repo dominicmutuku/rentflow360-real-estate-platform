@@ -178,6 +178,17 @@ const AddProperty: React.FC = () => {
       }
     }
 
+    // Warn if no images uploaded
+    if (formData.images.length === 0) {
+      const confirmSubmit = window.confirm(
+        'You haven\'t uploaded any images. Properties with images get more views. Do you want to continue anyway?'
+      );
+      if (!confirmSubmit) {
+        setCurrentStep(5); // Go to images step
+        return;
+      }
+    }
+
     setLoading(true);
     
     try {
