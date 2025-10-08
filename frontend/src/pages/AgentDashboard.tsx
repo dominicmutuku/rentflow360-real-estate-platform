@@ -5,7 +5,11 @@ import { useAuth } from '../context/AuthContext';
 interface Property {
   _id: string;
   title: string;
-  price: number;
+  price: {
+    amount: number;
+    currency: string;
+    period: string;
+  };
   location: {
     city: string;
     area: string;
@@ -31,7 +35,11 @@ interface Inquiry {
   property: {
     _id: string;
     title: string;
-    price: number;
+    price: {
+      amount: number;
+      currency: string;
+      period: string;
+    };
   };
   createdAt: string;
   conversations: Array<{
@@ -162,12 +170,42 @@ const AgentDashboard: React.FC = () => {
     }
   };
 
-  const formatPrice = (price: number) => {
+  const handleDeleteProperty = async (propertyId: string) => {
+    if (!window.confirm('Are you sure you want to delete this property? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('rentflow360_token');
+      const response = await fetch(`http://localhost:5000/api/properties/${propertyId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        // Remove property from local state
+        setProperties(prev => prev.filter(prop => prop._id !== propertyId));
+        alert('Property deleted successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete property: ${error.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting property:', error);
+      alert('Failed to delete property. Please try again.');
+    }
+  };
+
+  const formatPrice = (price: { amount: number; currency: string; period: string } | number) => {
+    // Handle both old format (number) and new format (object)
+    const amount = typeof price === 'number' ? price : price.amount;
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
       currency: 'KES',
       minimumFractionDigits: 0
-    }).format(price);
+    }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
@@ -563,10 +601,16 @@ const AgentDashboard: React.FC = () => {
                                 >
                                   View
                                 </Link>
-                                <button className="text-indigo-600 hover:text-indigo-900 mr-4">
+                                <Link
+                                  to={`/edit-property/${property._id}`}
+                                  className="text-indigo-600 hover:text-indigo-900 mr-4"
+                                >
                                   Edit
-                                </button>
-                                <button className="text-red-600 hover:text-red-900">
+                                </Link>
+                                <button 
+                                  onClick={() => handleDeleteProperty(property._id)}
+                                  className="text-red-600 hover:text-red-900"
+                                >
                                   Delete
                                 </button>
                               </td>

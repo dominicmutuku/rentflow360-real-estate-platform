@@ -8,24 +8,41 @@ interface Property {
   description: string;
   type: string;
   category: string;
-  price: number;
+  price: {
+    amount: number;
+    currency: string;
+    period: string;
+  };
   location: {
     address: string;
     area: string;
     city: string;
+    county: string;
     neighborhood: string;
-    coordinates: number[];
+    coordinates: {
+      latitude: number;
+      longitude: number;
+    };
   };
-  bedrooms: number;
-  bathrooms: number;
-  size: number;
-  features: string[];
+  specifications: {
+    bedrooms: number;
+    bathrooms: number;
+    size: {
+      value: number;
+      unit: string;
+    };
+  };
   amenities: string[];
-  images: string[];
-  status: 'active' | 'inactive' | 'pending';
+  images: Array<{
+    url: string;
+    caption?: string;
+    isPrimary?: boolean;
+  }>;
+  status: 'active' | 'inactive' | 'pending' | 'draft';
   furnished: boolean;
   parking: boolean;
   petFriendly: boolean;
+  listingType: 'rent' | 'sale' | 'both';
 }
 
 const EditProperty: React.FC = () => {
@@ -37,6 +54,7 @@ const EditProperty: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [property, setProperty] = useState<Property | null>(null);
   const [newImages, setNewImages] = useState<File[]>([]);
+  const [newImageUrls, setNewImageUrls] = useState<string[]>([]);
   const [removedImages, setRemovedImages] = useState<string[]>([]);
 
   const propertyTypes = [
@@ -67,16 +85,51 @@ const EditProperty: React.FC = () => {
 
   const fetchProperty = async () => {
     try {
-      const response = await fetch(`/api/properties/${id}`, {
+      setFetchLoading(true);
+      const response = await fetch(`http://localhost:5000/api/properties/${id}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('rentflow360_token')}`
         }
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setProperty(data);
+        const result = await response.json();
+        const propertyData = result.data?.property || result.data || result;
+        
+        // Transform backend data to match our interface
+        const transformedProperty: Property = {
+          _id: propertyData._id,
+          title: propertyData.title,
+          description: propertyData.description,
+          type: propertyData.propertyType || propertyData.type,
+          category: propertyData.category || 'residential',
+          price: propertyData.price || { amount: 0, currency: 'KES', period: 'monthly' },
+          location: {
+            address: propertyData.location?.address || '',
+            area: propertyData.location?.area || propertyData.location?.county || '',
+            city: propertyData.location?.city || '',
+            county: propertyData.location?.county || propertyData.location?.area || '',
+            neighborhood: propertyData.location?.neighborhood || '',
+            coordinates: propertyData.location?.coordinates || { latitude: 0, longitude: 0 }
+          },
+          specifications: propertyData.specifications || {
+            bedrooms: 0,
+            bathrooms: 0,
+            size: { value: 0, unit: 'sqft' }
+          },
+          amenities: propertyData.amenities || [],
+          images: propertyData.images || [],
+          status: propertyData.status || 'pending',
+          furnished: propertyData.furnished || false,
+          parking: propertyData.parking || false,
+          petFriendly: propertyData.petFriendly || false,
+          listingType: propertyData.listingType || 'rent'
+        };
+        
+        setProperty(transformedProperty);
       } else {
+        const errorData = await response.json();
+        console.error('Failed to fetch property:', errorData);
         alert('Failed to fetch property details');
         navigate('/agent-dashboard');
       }
@@ -94,19 +147,45 @@ const EditProperty: React.FC = () => {
     
     const { name, value, type } = e.target;
     
+    // Handle nested properties (e.g., "location.address", "price.amount", "specifications.bedrooms")
     if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setProperty(prev => prev ? {
-        ...prev,
-        [parent]: {
-          ...(prev[parent as keyof Property] as any),
-          [child]: type === 'number' ? parseFloat(value) : value
-        }
-      } : null);
+      const parts = name.split('.');
+      
+      if (parts.length === 2) {
+        const [parent, child] = parts;
+        setProperty(prev => {
+          if (!prev) return null;
+          
+          return {
+            ...prev,
+            [parent]: {
+              ...(prev[parent as keyof Property] as any),
+              [child]: type === 'number' ? (value === '' ? 0 : parseFloat(value) || 0) : value
+            }
+          };
+        });
+      } else if (parts.length === 3) {
+        // Handle deeply nested like "specifications.size.value"
+        const [parent, child, grandchild] = parts;
+        setProperty(prev => {
+          if (!prev) return null;
+          
+          return {
+            ...prev,
+            [parent]: {
+              ...(prev[parent as keyof Property] as any),
+              [child]: {
+                ...((prev[parent as keyof Property] as any)?.[child] || {}),
+                [grandchild]: type === 'number' ? (value === '' ? 0 : parseFloat(value) || 0) : value
+              }
+            }
+          };
+        });
+      }
     } else {
       setProperty(prev => prev ? {
         ...prev,
-        [name]: type === 'number' ? parseFloat(value) : value
+        [name]: type === 'number' ? (value === '' ? 0 : parseFloat(value) || 0) : value
       } : null);
     }
   };
@@ -121,14 +200,14 @@ const EditProperty: React.FC = () => {
     } : null);
   };
 
-  const handleFeatureToggle = (feature: string, type: 'features' | 'amenities') => {
+  const handleFeatureToggle = (feature: string) => {
     if (!property) return;
     
     setProperty(prev => prev ? {
       ...prev,
-      [type]: prev[type].includes(feature)
-        ? prev[type].filter(f => f !== feature)
-        : [...prev[type], feature]
+      amenities: prev.amenities.includes(feature)
+        ? prev.amenities.filter(f => f !== feature)
+        : [...prev.amenities, feature]
     } : null);
   };
 
@@ -152,6 +231,28 @@ const EditProperty: React.FC = () => {
     setNewImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleImageUrlAdd = (url: string) => {
+    if (!url.trim()) return;
+    
+    const currentTotal = (property?.images.length || 0) - removedImages.length + newImages.length + newImageUrls.length;
+    if (currentTotal >= 10) {
+      alert('Maximum 10 images allowed');
+      return;
+    }
+    
+    // Basic URL validation
+    try {
+      new URL(url);
+      setNewImageUrls(prev => [...prev, url.trim()]);
+    } catch {
+      alert('Please enter a valid URL');
+    }
+  };
+
+  const removeNewImageUrl = (index: number) => {
+    setNewImageUrls(prev => prev.filter((_, i) => i !== index));
+  };
+
   const restoreImage = (imageUrl: string) => {
     setRemovedImages(prev => prev.filter(url => url !== imageUrl));
   };
@@ -165,7 +266,7 @@ const EditProperty: React.FC = () => {
       case 2:
         return property.location.address.trim() !== '' && property.location.city.trim() !== '';
       case 3:
-        return property.price > 0 && property.size > 0;
+        return property.price.amount > 0 && property.specifications.size.value > 0;
       case 4:
         return true; // Features are optional
       case 5:
@@ -191,6 +292,11 @@ const EditProperty: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Only allow submission on step 5 (Images step)
+    if (currentStep !== 5) {
+      return;
+    }
+    
     if (!property || !validateStep(currentStep)) {
       alert('Please fill in all required fields');
       return;
@@ -199,27 +305,55 @@ const EditProperty: React.FC = () => {
     setLoading(true);
     
     try {
-      const formData = new FormData();
+      const token = localStorage.getItem('rentflow360_token');
       
-      // Add property data
-      const propertyData = {
-        ...property,
-        removedImages
+      // Keep existing images that weren't removed
+      const existingImages = property.images.filter(img => !removedImages.includes(img.url));
+      
+      // Add new URL images
+      const urlImages = newImageUrls.map((url, index) => ({
+        url: url,
+        caption: `Image ${existingImages.length + index + 1}`,
+        isPrimary: existingImages.length === 0 && index === 0
+      }));
+      
+      // Combine all images
+      const allImages = [...existingImages, ...urlImages];
+      
+      // Transform nested structure to flat structure for backend validation
+      const updateData = {
+        title: property.title,
+        description: property.description,
+        type: property.type,
+        status: property.status,
+        price: property.price.amount, // Flatten price
+        location: {
+          address: property.location.address,
+          city: property.location.city,
+          county: property.location.county,
+          neighborhood: property.location.neighborhood,
+          coordinates: property.location.coordinates
+        },
+        bedrooms: property.specifications.bedrooms, // Flatten specifications
+        bathrooms: property.specifications.bathrooms,
+        size: property.specifications.size.value,
+        amenities: property.amenities,
+        images: allImages, // Include updated images array
+        furnished: property.furnished,
+        parking: property.parking,
+        petFriendly: property.petFriendly,
+        listingType: property.listingType
       };
-      
-      formData.append('propertyData', JSON.stringify(propertyData));
-      
-      // Add new images
-      newImages.forEach((image) => {
-        formData.append('images', image);
-      });
 
-      const response = await fetch(`/api/properties/${id}`, {
+      console.log('Updating property with data:', updateData);
+
+      const response = await fetch(`http://localhost:5000/api/properties/${id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: formData
+        body: JSON.stringify(updateData)
       });
 
       if (response.ok) {
@@ -396,8 +530,8 @@ const EditProperty: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  name="price"
-                  value={property.price}
+                  name="price.amount"
+                  value={property.price.amount}
                   onChange={handleInputChange}
                   placeholder="100000"
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -411,8 +545,8 @@ const EditProperty: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  name="size"
-                  value={property.size}
+                  name="specifications.size.value"
+                  value={property.specifications.size.value}
                   onChange={handleInputChange}
                   placeholder="120"
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -427,8 +561,8 @@ const EditProperty: React.FC = () => {
                   Bedrooms
                 </label>
                 <select
-                  name="bedrooms"
-                  value={property.bedrooms}
+                  name="specifications.bedrooms"
+                  value={property.specifications.bedrooms}
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
@@ -445,8 +579,8 @@ const EditProperty: React.FC = () => {
                   Bathrooms
                 </label>
                 <select
-                  name="bathrooms"
-                  value={property.bathrooms}
+                  name="specifications.bathrooms"
+                  value={property.specifications.bathrooms}
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
@@ -511,12 +645,12 @@ const EditProperty: React.FC = () => {
                   <label key={feature} className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={property.features.includes(feature)}
-                      onChange={() => handleFeatureToggle(feature, 'features')}
+                      checked={property.amenities.includes(feature)}
+                      onChange={() => handleFeatureToggle(feature)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="ml-2 text-sm text-gray-700 capitalize">
-                      {feature.replace('_', ' ')}
+                      {feature.replace(/_/g, ' ')}
                     </span>
                   </label>
                 ))}
@@ -531,11 +665,11 @@ const EditProperty: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={property.amenities.includes(amenity)}
-                      onChange={() => handleFeatureToggle(amenity, 'amenities')}
+                      onChange={() => handleFeatureToggle(amenity)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="ml-2 text-sm text-gray-700 capitalize">
-                      {amenity.replace('_', ' ')}
+                      {amenity.replace(/_/g, ' ')}
                     </span>
                   </label>
                 ))}
@@ -554,19 +688,19 @@ const EditProperty: React.FC = () => {
               <div>
                 <h4 className="font-medium text-gray-700 mb-3">Current Images</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {property.images.map((imageUrl, index) => {
-                    const isRemoved = removedImages.includes(imageUrl);
+                  {property.images.map((image, index) => {
+                    const isRemoved = removedImages.includes(image.url);
                     return (
                       <div key={index} className={`relative ${isRemoved ? 'opacity-50' : ''}`}>
                         <img
-                          src={imageUrl}
-                          alt={`Property ${index + 1}`}
+                          src={image.url}
+                          alt={image.caption || `Property ${index + 1}`}
                           className="w-full h-24 object-cover rounded-lg"
                         />
                         {isRemoved ? (
                           <button
                             type="button"
-                            onClick={() => restoreImage(imageUrl)}
+                            onClick={() => restoreImage(image.url)}
                             className="absolute -top-2 -right-2 bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-green-700"
                           >
                             ↶
@@ -574,13 +708,13 @@ const EditProperty: React.FC = () => {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => removeExistingImage(imageUrl)}
+                            onClick={() => removeExistingImage(image.url)}
                             className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
                           >
                             ×
                           </button>
                         )}
-                        {index === 0 && !isRemoved && (
+                        {(image.isPrimary || index === 0) && !isRemoved && (
                           <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded">
                             Main
                           </span>
@@ -605,14 +739,51 @@ const EditProperty: React.FC = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="text-sm text-gray-500 mt-1">
-                Upload high-quality images. Total images: {property.images.length - removedImages.length + newImages.length}/10
+                Upload high-quality images. Total images: {property.images.length - removedImages.length + newImages.length + newImageUrls.length}/10
+              </p>
+            </div>
+
+            {/* Add Images by URL */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Or Add Image by URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  id="editImageUrlInput"
+                  placeholder="https://example.com/image.jpg"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const input = e.target as HTMLInputElement;
+                      handleImageUrlAdd(input.value);
+                      input.value = '';
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById('editImageUrlInput') as HTMLInputElement;
+                    handleImageUrlAdd(input.value);
+                    input.value = '';
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Add URL
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Paste a direct link to an image (jpg, png, etc.)
               </p>
             </div>
 
             {/* New Images Preview */}
             {newImages.length > 0 && (
               <div>
-                <h4 className="font-medium text-gray-700 mb-3">New Images</h4>
+                <h4 className="font-medium text-gray-700 mb-3">New Uploaded Images</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {newImages.map((image, index) => (
                     <div key={index} className="relative">
@@ -630,6 +801,37 @@ const EditProperty: React.FC = () => {
                       </button>
                       <span className="absolute bottom-1 left-1 bg-green-600 text-white text-xs px-2 py-1 rounded">
                         New
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* New URL Images Preview */}
+            {newImageUrls.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-700 mb-3">New Images from URLs</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {newImageUrls.map((url, index) => (
+                    <div key={`url-${index}`} className="relative">
+                      <img
+                        src={url}
+                        alt={`New URL ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Invalid+URL';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeNewImageUrl(index)}
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
+                      >
+                        ×
+                      </button>
+                      <span className="absolute bottom-1 left-1 bg-green-600 text-white text-xs px-2 py-1 rounded">
+                        New URL
                       </span>
                     </div>
                   ))}

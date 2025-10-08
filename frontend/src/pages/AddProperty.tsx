@@ -21,6 +21,7 @@ interface PropertyForm {
   features: string[];
   amenities: string[];
   images: File[];
+  imageUrls: string[]; // Add support for image URLs
   status: 'active' | 'inactive' | 'pending';
   furnished: boolean;
   parking: boolean;
@@ -51,6 +52,7 @@ const AddProperty: React.FC = () => {
     features: [],
     amenities: [],
     images: [],
+    imageUrls: [], // Initialize image URLs array
     status: 'active',
     furnished: false,
     parking: false,
@@ -118,16 +120,48 @@ const AddProperty: React.FC = () => {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    const currentTotal = formData.images.length + formData.imageUrls.length;
+    const remainingSlots = 10 - currentTotal;
+    const filesToAdd = files.slice(0, remainingSlots);
+    
     setFormData(prev => ({
       ...prev,
-      images: [...prev.images, ...files].slice(0, 10) // Limit to 10 images
+      images: [...prev.images, ...filesToAdd]
     }));
+  };
+
+  const handleImageUrlAdd = (url: string) => {
+    if (!url.trim()) return;
+    
+    const currentTotal = formData.images.length + formData.imageUrls.length;
+    if (currentTotal >= 10) {
+      alert('Maximum 10 images allowed');
+      return;
+    }
+    
+    // Basic URL validation
+    try {
+      new URL(url);
+      setFormData(prev => ({
+        ...prev,
+        imageUrls: [...prev.imageUrls, url.trim()]
+      }));
+    } catch {
+      alert('Please enter a valid URL');
+    }
   };
 
   const removeImage = (index: number) => {
     setFormData(prev => ({
       ...prev,
       images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
+  const removeImageUrl = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((_, i) => i !== index)
     }));
   };
 
@@ -147,7 +181,7 @@ const AddProperty: React.FC = () => {
         // Features & Amenities step - no required fields, just allow continuation
         return true;
       case 5:
-        // Images step - temporarily allow without images
+        // Images step - allow without images but warn
         return true;
       default:
         return true;
@@ -169,7 +203,18 @@ const AddProperty: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate all steps before submission
+    console.log('Form submitted on step:', currentStep);
+    
+    // CRITICAL: Only allow submission on step 5 (Images step)
+    // Exit immediately if not on step 5 - don't run ANY validation or warnings
+    if (currentStep !== 5) {
+      console.log('Not on step 5, blocking submission');
+      return;
+    }
+    
+    console.log('On step 5, proceeding with submission');
+    
+    // Now we're on step 5, validate all previous steps
     for (let step = 1; step <= 5; step++) {
       if (!validateStep(step)) {
         alert(`Please complete all required fields in step ${step}`);
@@ -178,13 +223,14 @@ const AddProperty: React.FC = () => {
       }
     }
 
-    // Warn if no images uploaded
-    if (formData.images.length === 0) {
+    // Warn if no images uploaded (only runs when actually submitting on step 5)
+    const totalImages = formData.images.length + formData.imageUrls.length;
+    if (totalImages === 0) {
       const confirmSubmit = window.confirm(
         'You haven\'t uploaded any images. Properties with images get more views. Do you want to continue anyway?'
       );
       if (!confirmSubmit) {
-        setCurrentStep(5); // Go to images step
+        // User cancelled, stay on step 5
         return;
       }
     }
@@ -194,6 +240,13 @@ const AddProperty: React.FC = () => {
     try {
       // Combine features and amenities into one array for backend
       const combinedAmenities = [...formData.features, ...formData.amenities];
+      
+      // Convert imageUrls to image objects format
+      const urlImages = formData.imageUrls.map((url, index) => ({
+        url: url,
+        caption: `Image ${formData.images.length + index + 1}`,
+        isPrimary: formData.images.length === 0 && index === 0
+      }));
       
       // Prepare property data to match backend validation expectations
       const propertyData = {
@@ -217,7 +270,7 @@ const AddProperty: React.FC = () => {
         parking: formData.parking,
         petFriendly: formData.petFriendly,
         listingType: 'rent',
-        images: []
+        images: urlImages // Include URL images
       };
 
       console.log('Sending property data:', propertyData);
@@ -558,9 +611,10 @@ const AddProperty: React.FC = () => {
           <div className="space-y-6">
             <h3 className="text-lg font-semibold text-gray-800">Property Images</h3>
             
+            {/* File Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload Images * (Max 10 images)
+                Upload Images * (Max 10 images total)
               </label>
               <input
                 type="file"
@@ -574,14 +628,52 @@ const AddProperty: React.FC = () => {
               </p>
             </div>
 
+            {/* URL Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Or Add Image by URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  id="imageUrlInput"
+                  placeholder="https://example.com/image.jpg"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const input = e.target as HTMLInputElement;
+                      handleImageUrlAdd(input.value);
+                      input.value = '';
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById('imageUrlInput') as HTMLInputElement;
+                    handleImageUrlAdd(input.value);
+                    input.value = '';
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Add URL
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Paste a direct link to an image (jpg, png, etc.)
+              </p>
+            </div>
+
+            {/* Display Uploaded Files */}
             {formData.images.length > 0 && (
               <div>
                 <h4 className="font-medium text-gray-700 mb-3">
-                  Uploaded Images ({formData.images.length}/10)
+                  Uploaded Files ({formData.images.length})
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {formData.images.map((image, index) => (
-                    <div key={index} className="relative">
+                    <div key={`file-${index}`} className="relative">
                       <img
                         src={URL.createObjectURL(image)}
                         alt={`Property ${index + 1}`}
@@ -594,7 +686,42 @@ const AddProperty: React.FC = () => {
                       >
                         ×
                       </button>
-                      {index === 0 && (
+                      {index === 0 && formData.imageUrls.length === 0 && (
+                        <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                          Main
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Display URL Images */}
+            {formData.imageUrls.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-700 mb-3">
+                  Images from URLs ({formData.imageUrls.length})
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {formData.imageUrls.map((url, index) => (
+                    <div key={`url-${index}`} className="relative">
+                      <img
+                        src={url}
+                        alt={`Property URL ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Invalid+URL';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImageUrl(index)}
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
+                      >
+                        ×
+                      </button>
+                      {index === 0 && formData.images.length === 0 && (
                         <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded">
                           Main
                         </span>
