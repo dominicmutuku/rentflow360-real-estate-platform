@@ -113,12 +113,6 @@ const AgentDashboard: React.FC = () => {
 
       if (propertiesRes.ok) {
         const propertiesData = await propertiesRes.json();
-        console.log('=== PROPERTIES DATA ===');
-        console.log('Properties received:', propertiesData.data?.properties);
-        if (propertiesData.data?.properties && propertiesData.data.properties.length > 0) {
-          console.log('First property images:', propertiesData.data.properties[0].images);
-        }
-        console.log('======================');
         setProperties(propertiesData.data?.properties || []);
       } else {
         console.error('Failed to fetch properties:', await propertiesRes.text());
@@ -458,11 +452,6 @@ const AgentDashboard: React.FC = () => {
                                   src={typeof property.images[0] === 'string' ? property.images[0] : property.images[0].url}
                                   alt={property.title}
                                   className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    console.error('Image failed to load:', property.images[0]);
-                                    const target = e.target as HTMLImageElement;
-                                    target.src = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=100';
-                                  }}
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-gray-500">
@@ -579,11 +568,6 @@ const AgentDashboard: React.FC = () => {
                                           : '/placeholder-property.jpg'
                                       }
                                       alt={property.title}
-                                      onError={(e) => {
-                                        console.error('Table image failed:', property.images[0]);
-                                        const target = e.target as HTMLImageElement;
-                                        target.src = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=100';
-                                      }}
                                     />
                                   </div>
                                   <div className="ml-4">

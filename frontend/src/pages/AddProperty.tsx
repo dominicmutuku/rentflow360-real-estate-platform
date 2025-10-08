@@ -258,9 +258,6 @@ const AddProperty: React.FC = () => {
         isPrimary: index === 0
       }));
       
-      console.log('Total URL images:', urlImages.length);
-      console.log('URL images:', urlImages);
-      
       // Prepare property data to match backend validation expectations
       const propertyData = {
         title: formData.title,
