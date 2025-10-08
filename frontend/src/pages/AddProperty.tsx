@@ -118,16 +118,33 @@ const AddProperty: React.FC = () => {
     }));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const currentTotal = formData.images.length + formData.imageUrls.length;
     const remainingSlots = 10 - currentTotal;
+    
+    if (remainingSlots <= 0) {
+      alert('Maximum 10 images allowed');
+      return;
+    }
+    
     const filesToAdd = files.slice(0, remainingSlots);
     
-    setFormData(prev => ({
-      ...prev,
-      images: [...prev.images, ...filesToAdd]
-    }));
+    // Convert files to base64 and add to imageUrls
+    for (const file of filesToAdd) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setFormData(prev => ({
+          ...prev,
+          imageUrls: [...prev.imageUrls, base64String]
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    // Clear the input so the same file can be selected again
+    e.target.value = '';
   };
 
   const handleImageUrlAdd = (url: string) => {
@@ -202,19 +219,23 @@ const AddProperty: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
-    console.log('Form submitted on step:', currentStep);
+    console.log('========================================');
+    console.log('FORM SUBMIT HANDLER CALLED');
+    console.log('Current Step:', currentStep);
+    console.log('========================================');
     
-    // CRITICAL: Only allow submission on step 5 (Images step)
-    // Exit immediately if not on step 5 - don't run ANY validation or warnings
+    // ABSOLUTE BLOCK: Do not proceed unless on step 5
     if (currentStep !== 5) {
-      console.log('Not on step 5, blocking submission');
-      return;
+      console.log('🛑 BLOCKED: Not on step 5');
+      alert('Please complete all steps before submitting. You are on step ' + currentStep);
+      return false;
     }
     
-    console.log('On step 5, proceeding with submission');
+    console.log('✅ ALLOWED: Proceeding with submission on step 5');
     
-    // Now we're on step 5, validate all previous steps
+    // Validate all steps before submission
     for (let step = 1; step <= 5; step++) {
       if (!validateStep(step)) {
         alert(`Please complete all required fields in step ${step}`);
@@ -223,18 +244,7 @@ const AddProperty: React.FC = () => {
       }
     }
 
-    // Warn if no images uploaded (only runs when actually submitting on step 5)
-    const totalImages = formData.images.length + formData.imageUrls.length;
-    if (totalImages === 0) {
-      const confirmSubmit = window.confirm(
-        'You haven\'t uploaded any images. Properties with images get more views. Do you want to continue anyway?'
-      );
-      if (!confirmSubmit) {
-        // User cancelled, stay on step 5
-        return;
-      }
-    }
-
+    // NO WARNING - just proceed with or without images
     setLoading(true);
     
     try {
@@ -244,9 +254,12 @@ const AddProperty: React.FC = () => {
       // Convert imageUrls to image objects format
       const urlImages = formData.imageUrls.map((url, index) => ({
         url: url,
-        caption: `Image ${formData.images.length + index + 1}`,
-        isPrimary: formData.images.length === 0 && index === 0
+        caption: `Image ${index + 1}`,
+        isPrimary: index === 0
       }));
+      
+      console.log('Total URL images:', urlImages.length);
+      console.log('URL images:', urlImages);
       
       // Prepare property data to match backend validation expectations
       const propertyData = {
@@ -665,53 +678,21 @@ const AddProperty: React.FC = () => {
               </p>
             </div>
 
-            {/* Display Uploaded Files */}
-            {formData.images.length > 0 && (
-              <div>
-                <h4 className="font-medium text-gray-700 mb-3">
-                  Uploaded Files ({formData.images.length})
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {formData.images.map((image, index) => (
-                    <div key={`file-${index}`} className="relative">
-                      <img
-                        src={URL.createObjectURL(image)}
-                        alt={`Property ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
-                      >
-                        ×
-                      </button>
-                      {index === 0 && formData.imageUrls.length === 0 && (
-                        <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded">
-                          Main
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Display URL Images */}
+            {/* Display All Images */}
             {formData.imageUrls.length > 0 && (
               <div>
                 <h4 className="font-medium text-gray-700 mb-3">
-                  Images from URLs ({formData.imageUrls.length})
+                  Added Images ({formData.imageUrls.length}/10)
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {formData.imageUrls.map((url, index) => (
-                    <div key={`url-${index}`} className="relative">
+                    <div key={`image-${index}`} className="relative">
                       <img
                         src={url}
-                        alt={`Property URL ${index + 1}`}
+                        alt={`Property ${index + 1}`}
                         className="w-full h-24 object-cover rounded-lg"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Invalid+URL';
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Invalid';
                         }}
                       />
                       <button
@@ -721,7 +702,7 @@ const AddProperty: React.FC = () => {
                       >
                         ×
                       </button>
-                      {index === 0 && formData.images.length === 0 && (
+                      {index === 0 && (
                         <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded">
                           Main
                         </span>
@@ -815,7 +796,12 @@ const AddProperty: React.FC = () => {
               {currentStep < 5 ? (
                 <button
                   type="button"
-                  onClick={nextStep}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Next button clicked on step:', currentStep);
+                    nextStep();
+                  }}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >
                   Next
@@ -824,6 +810,7 @@ const AddProperty: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading}
+                  onClick={() => console.log('Submit button clicked on step:', currentStep)}
                   className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Adding Property...' : 'Add Property'}

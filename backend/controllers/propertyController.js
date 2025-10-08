@@ -217,6 +217,11 @@ const createProperty = async (req, res) => {
       listingType = 'rent'
     } = req.body;
 
+    console.log('=== CREATE PROPERTY REQUEST ===');
+    console.log('Images received:', images);
+    console.log('Images length:', images ? images.length : 0);
+    console.log('===============================');
+
     // Get user details for contact information
     const user = await User.findById(req.user.id);
     if (!user) {
